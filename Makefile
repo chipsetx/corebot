@@ -4,7 +4,7 @@ LIBS=-ldl
 
 all:
 	$(CC) $(CFLAGS) -shared -o modules/server.so modules/server.c
-	$(CC) $(CFLAGS) -rdynamic -o corebot bot.c -ldl
+	$(CC) $(CFLAGS) -rdynamic -o corebot bot.c log.c -ldl
 
 clean:
 	rm -f modules/*.so corebot

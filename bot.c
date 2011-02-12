@@ -125,33 +125,33 @@ int bot_module_load(struct bot_module *mod)
 
     sprintf(str_buf, "modules/%s.so", mod->name);
 
-    printf("loading \"%s\"\n", str_buf);
+    log_printf("loading \"%s\"\n", str_buf);
 
     mod->dl = dlopen(str_buf, RTLD_LAZY|RTLD_GLOBAL);
 
     if (mod->dl == NULL)
     {
-        fprintf(stderr, "%s\n", dlerror());
+        log_printf("error: %s\n", dlerror());
     }
     else
     {
-        printf("  loaded as 0x%08X\n", (int)mod->dl);
+        log_printf("  loaded as 0x%08X\n", (int)mod->dl);
 
         sprintf(str_buf, "%s_init", mod->name);
         mod->init = dlsym(mod->dl, str_buf);
-        printf("    init at 0x%08X\n", (int)mod->init);
+        log_printf("    init at 0x%08X\n", (int)mod->init);
 
         sprintf(str_buf, "%s_read", mod->name);
         mod->read = dlsym(mod->dl, str_buf);
-        printf("    read at 0x%08X\n", (int)mod->read);
+        log_printf("    read at 0x%08X\n", (int)mod->read);
 
         sprintf(str_buf, "%s_timer", mod->name);
         mod->timer = dlsym(mod->dl, str_buf);
-        printf("    timer at 0x%08X\n", (int)mod->timer);
+        log_printf("    timer at 0x%08X\n", (int)mod->timer);
 
         sprintf(str_buf, "%s_free", mod->name);
         mod->free = dlsym(mod->dl, str_buf);
-        printf("    free at 0x%08X\n", (int)mod->free);
+        log_printf("    free at 0x%08X\n", (int)mod->free);
 
         if (mod->init)
         {
@@ -176,7 +176,7 @@ void bot_module_free(struct bot_module *mod)
 
     sprintf(str_buf, "modules/%s.so", mod->name);
 
-    printf("unloading \"%s\"\n", str_buf);
+    log_printf("unloading \"%s\"\n", str_buf);
 
     if (mod->free)
     {

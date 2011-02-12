@@ -16,6 +16,8 @@
 
 #include <stdio.h>
 
+#include "log.h"
+
 struct bot_module
 {
     char *name;                 // name of the module, file and namespace

@@ -29,6 +29,8 @@
 /* addrinfo */
 #include <netdb.h>
 
+#define BUF_SIZE 1024
+
 int net_sock = 0;
 
 int server_sock4(char *host, int port, int *net_sock, struct sockaddr *net_server, socklen_t *net_addrlen)
@@ -76,17 +78,17 @@ int server_init()
     struct sockaddr net_server;
     socklen_t net_addrlen;
 
-    printf("server: init\n");
+    log_printf("init\n");
 
     if (!server_sock4("chat.eu.freenode.net", 6667, &net_sock, &net_server, &net_addrlen))
     {
-        fprintf(stderr, "server: error resolving\n");
+        log_printf("error resolving\n");
         return -1;
     }
 
     if (connect(net_sock, &net_server, net_addrlen) == 0)
     {
-        printf("server: connected\n");
+        log_printf("connected\n");
         bot_register_fd(net_sock);
     }
     else
@@ -99,13 +101,18 @@ int server_init()
 
 void server_read(int read)
 {
-    char net_buf[512];
-    memset(net_buf, 0, 512);
+    static char buf[BUF_SIZE];
+    static int off = 0;
+    int len;
+    memset(buf+off, 0, BUF_SIZE - off);
 
-    if (recv(net_sock, net_buf, 512, 0) > 0) {
-        printf("%s", net_buf);
-    } else {
-        printf("server: socket closed unexpectedly\n");
+    if ( (len = recv(read, buf+off, BUF_SIZE - off, 0)) > 0)
+    {
+        log_printf("%s", buf);
+    }
+    else
+    {
+        log_printf("server: socket closed unexpectedly\n");
         close(net_sock);
         bot_unregister_fd();
         net_sock = 0;
@@ -114,7 +121,7 @@ void server_read(int read)
 
 void server_free()
 {
-    printf("server: free\n");
+    log_printf("server: free\n");
     bot_unregister_fd();
 
     if (net_sock)
