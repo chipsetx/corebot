@@ -108,7 +108,33 @@ void server_read(int read)
 
     if ( (len = recv(read, buf+off, BUF_SIZE - off, 0)) > 0)
     {
-        log_printf("%s", buf);
+        len += off;
+
+        char *line = buf;
+        char *ptr = buf;
+        char *last = buf;
+
+        while ( (ptr = strstr(ptr, "\r\n")) )
+        {
+            *ptr++ = '\0';
+            *ptr++ = '\0';
+
+            log_printf("%s\n", line);
+
+            line = ptr;
+            last = ptr;
+        }
+
+        off = len - (last - buf);
+        if (off > BUF_SIZE - 1)
+        {
+            /* discard invalid buffers */
+            off = 0;
+        }
+        else if (off > 0)
+        {
+            memcpy(buf, last, off);
+        }
     }
     else
     {
