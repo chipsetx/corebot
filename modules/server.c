@@ -112,6 +112,11 @@ int server_init(CTX ctx)
     return 1;
 }
 
+void server_send(const char *msg)
+{
+    send(net_sock, msg, strlen(msg), 0);
+}
+
 void server_timer()
 {
     struct sockaddr net_server;

@@ -16,14 +16,41 @@
 
 #include "../bot.h"
 
+#include <string.h>
+#include <regex.h>
+
 CTX irc_ctx = NULL;
 
 void server_register_cb(void (*cb)(const char *));
 void server_unregister_cb(void (*cb)(const char *));
 
+regex_t preg;
+
+void irc_memcpy(char *dst, const char *src, int len)
+{
+    memcpy(dst, src, len);
+    *(dst + len) = '\0';
+}
+
 void irc_process(const char *line)
 {
-    log_printf("%s\n", line);
+    regmatch_t pmatch[9];
+
+    char prefix[512];
+    char command[512];
+    char params[512];
+    char trail[512];
+
+    if (regexec(&preg, line, 9, pmatch, 0) != REG_NOMATCH)
+    {
+        irc_memcpy(prefix, line + pmatch[2].rm_so, pmatch[2].rm_eo - pmatch[2].rm_so);
+        irc_memcpy(command, line + pmatch[3].rm_so, pmatch[3].rm_eo - pmatch[3].rm_so);
+        irc_memcpy(command, line + pmatch[3].rm_so, pmatch[3].rm_eo - pmatch[3].rm_so);
+        irc_memcpy(params, line + pmatch[5].rm_so, pmatch[5].rm_eo - pmatch[5].rm_so);
+        irc_memcpy(trail, line + pmatch[8].rm_so, pmatch[8].rm_eo - pmatch[8].rm_so);
+
+        log_printf("DEBUG <%s> <%s> <%s> <%s>\n", prefix, command, params, trail);
+    }
 }
 
 int irc_init(CTX ctx)
@@ -36,6 +63,13 @@ int irc_init(CTX ctx)
         return -1;
     }
 
+    /* an edge case where params have colons will break, luckily it is rarely used */
+    if (regcomp(&preg, "^(:([^ ]+) )?([^ ]+)( ([^:]+))?( (:(.+)))?$", REG_EXTENDED) != 0)
+    {
+        printf("error compiling matching regexp\n");
+        return -1;
+    }
+
     server_register_cb(irc_process);
 
     return 1;
@@ -44,4 +78,5 @@ int irc_init(CTX ctx)
 void irc_free()
 {
     server_unregister_cb(irc_process);
+    regfree(&preg);
 }
