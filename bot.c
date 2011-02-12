@@ -33,13 +33,12 @@ struct bot_module modules[] =
 };
 
 struct bot_module *_bot_context = NULL;
-#define bot_ctx(a) _bot_context = a
 
 int main(int argc, char **argv)
 {
     fd_set sockets;
     int fd_max;
-    time_t last_event;
+    time_t last_event = 0;
     time_t now;
     struct timeval tv;
 
@@ -49,11 +48,26 @@ int main(int argc, char **argv)
         bot_module_load(mod);
     }
 
-    last_event = time(NULL);
-
     /* main fd loop */
     while(1)
     {
+        /* handle timer */
+        now = time(NULL);
+        if (now > last_event)
+        {
+            EACH_LOADED_MODULE(modules, mod)
+            {
+                if (mod->timer)
+                {
+                    bot_ctx(mod);
+                    mod->timer();
+                    bot_ctx(NULL);
+                }
+            }
+
+            last_event = now;
+        }
+
         /* XXX: optimize and simplify this by caching fd_set and regenerating it only when the set really changes */
         fd_max = 0;
         FD_ZERO(&sockets);
@@ -90,21 +104,6 @@ int main(int argc, char **argv)
                         mod->read(mod->sock);
                         bot_ctx(NULL);
                     }
-                }
-            }
-        }
-
-        /* handle timer */
-        now = time(NULL);
-        if (now > last_event)
-        {
-            EACH_LOADED_MODULE(modules, mod)
-            {
-                if (mod->timer)
-                {
-                    bot_ctx(mod);
-                    mod->timer();
-                    bot_ctx(NULL);
                 }
             }
         }
@@ -156,7 +155,7 @@ int bot_module_load(struct bot_module *mod)
         if (mod->init)
         {
             bot_ctx(mod);
-            mod->version = mod->init();
+            mod->version = mod->init(mod);
             bot_ctx(NULL);
 
             if (mod->version < 0)

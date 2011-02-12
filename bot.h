@@ -18,6 +18,9 @@
 
 #include "log.h"
 
+struct bot_module;
+typedef struct bot_module * CTX;
+
 struct bot_module
 {
     char *name;                 // name of the module, file and namespace
@@ -26,13 +29,17 @@ struct bot_module
     int sock;                   // optionally registered socket
 
                                 // these are called (if exported)...
-    int (*init)(void);          //  on module load (returns version)
+    int (*init)(CTX);           //  on module load (returns version)
     void (*read)(int sock);     //  when a registered socket is ready to read data
     void (*timer)(void);        //  approximately once a second
     void (*free)(void);         //  on module unload
 };
 
 extern struct bot_module modules[];
+
+extern struct bot_module *_bot_context;
+#define bot_ctx(a) _bot_context = a
+#define bot_get_ctx() _bot_context
 
 #define EACH_MODULE(a, b) \
     for (struct bot_module *b = a; b->name; b++)

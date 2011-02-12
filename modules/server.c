@@ -29,20 +29,43 @@
 /* addrinfo */
 #include <netdb.h>
 
+CTX server_ctx = NULL;
+
 #define BUF_SIZE 1024
 
 int net_sock = 0;
+int connected = 0;
 
-int server_sock4(char *host, int port, int *net_sock, struct sockaddr *net_server, socklen_t *net_addrlen)
+/* XXX: implement a list when more than one raw listener required */
+void (*server_cb)(const char *) = NULL;
+CTX server_cb_ctx = NULL;
+
+void server_register_cb(void (*cb)(const char *))
 {
-    int s = 0;
+    server_cb_ctx = bot_get_ctx();
+
+    bot_ctx(server_ctx);
+    if (server_cb != NULL)
+    {
+        log_printf("warning: server callback overridden!\n");
+    }
+    bot_ctx(server_cb_ctx);
+
+    server_cb = cb;
+}
+
+void server_unregister_cb(void (*cb)(const char *))
+{
+    if (server_cb == cb)
+    {
+        server_cb = NULL;
+    }
+}
+
+int server_resolv(char *host, int port, struct sockaddr *net_server, socklen_t *net_addrlen)
+{
     struct addrinfo *addr_list = NULL;
     struct addrinfo *addr;
-
-    if (!(s = socket(AF_INET, SOCK_STREAM, 0)))
-    {
-        return -1;
-    }
 
     if (getaddrinfo(host, NULL, NULL, &addr_list) == 0)
     {
@@ -58,7 +81,6 @@ int server_sock4(char *host, int port, int *net_sock, struct sockaddr *net_serve
             if (addr->ai_family == AF_INET)
             {
                 *net_addrlen = addr->ai_addrlen;
-                *net_sock = s;
                 memcpy(net_server, addr->ai_addr, addr->ai_addrlen);
                 ((struct sockaddr_in *)net_server)->sin_port = htons(port);
                 freeaddrinfo(addr_list);
@@ -73,30 +95,48 @@ int server_sock4(char *host, int port, int *net_sock, struct sockaddr *net_serve
     return -1;
 }
 
-int server_init()
+int server_init(CTX ctx)
+{
+    server_ctx = ctx;
+
+    if (!(net_sock = socket(AF_INET, SOCK_STREAM, 0)))
+    {
+        log_printf("error creating socket");
+        return -1;
+    }
+
+    bot_register_fd(net_sock);
+
+    log_printf("socket: %d\n", net_sock);
+
+    return 1;
+}
+
+void server_timer()
 {
     struct sockaddr net_server;
     socklen_t net_addrlen;
 
-    log_printf("init\n");
-
-    if (!server_sock4("chat.eu.freenode.net", 6667, &net_sock, &net_server, &net_addrlen))
+    if (!connected)
     {
-        log_printf("error resolving\n");
-        return -1;
-    }
+        if (!server_resolv("chat.eu.freenode.net", 6667, &net_server, &net_addrlen))
+        {
+            log_printf("error resolving\n");
+            return;
+        }
 
-    if (connect(net_sock, &net_server, net_addrlen) == 0)
-    {
-        log_printf("connected\n");
-        bot_register_fd(net_sock);
-    }
-    else
-    {
-        perror("connect");
-    }
+        log_printf("resolved\n");
 
-    return 1;
+        if (connect(net_sock, &net_server, net_addrlen) == 0)
+        {
+            connected = 1;
+            log_printf("connected\n");
+        }
+        else
+        {
+            perror("connect");
+        }
+    }
 }
 
 void server_read(int read)
@@ -119,7 +159,12 @@ void server_read(int read)
             *ptr++ = '\0';
             *ptr++ = '\0';
 
-            log_printf("%s\n", line);
+            if (server_cb)
+            {
+                bot_ctx(server_cb_ctx);
+                server_cb(line);
+                bot_ctx(server_ctx);
+            }
 
             line = ptr;
             last = ptr;
@@ -138,20 +183,18 @@ void server_read(int read)
     }
     else
     {
-        log_printf("server: socket closed unexpectedly\n");
+        log_printf("disconnected\n");
         close(net_sock);
         bot_unregister_fd();
-        net_sock = 0;
+        connected = 0;
     }
 }
 
 void server_free()
 {
-    log_printf("server: free\n");
-    bot_unregister_fd();
-
     if (net_sock)
     {
+        bot_unregister_fd();
         close(net_sock);
     }
 }
