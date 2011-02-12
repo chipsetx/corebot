@@ -25,12 +25,6 @@
 
 #include "bot.h"
 
-#define EACH_MODULE(a, b) \
-    for (struct bot_module *b = a; b->name; b++)
-
-#define EACH_LOADED_MODULE(a, b) \
-    for (struct bot_module *b = a; b->dl; b++)
-
 struct bot_module modules[] =
 {
     { "server" },
@@ -43,7 +37,6 @@ struct bot_module *_bot_context = NULL;
 
 int main(int argc, char **argv)
 {
-    char str_buf[512];
     fd_set sockets;
     int fd_max;
     time_t last_event;
@@ -53,43 +46,7 @@ int main(int argc, char **argv)
     /* load modules */
     EACH_MODULE(modules, mod)
     {
-        sprintf(str_buf, "modules/%s.so", mod->name);
-
-        printf("loading \"%s\"\n", str_buf);
-
-        mod->dl = dlopen(str_buf, RTLD_LAZY|RTLD_GLOBAL);
-
-        if (mod->dl == NULL)
-        {
-            fprintf(stderr, "%s\n", dlerror());
-        }
-        else
-        {
-            printf("  loaded as 0x%08X\n", (int)mod->dl);
-
-            sprintf(str_buf, "%s_init", mod->name);
-            mod->init = dlsym(mod->dl, str_buf);
-            printf("    init at 0x%08X\n", (int)mod->init);
-
-            sprintf(str_buf, "%s_read", mod->name);
-            mod->read = dlsym(mod->dl, str_buf);
-            printf("    read at 0x%08X\n", (int)mod->read);
-
-            sprintf(str_buf, "%s_timer", mod->name);
-            mod->timer = dlsym(mod->dl, str_buf);
-            printf("    timer at 0x%08X\n", (int)mod->timer);
-
-            sprintf(str_buf, "%s_free", mod->name);
-            mod->free = dlsym(mod->dl, str_buf);
-            printf("    free at 0x%08X\n", (int)mod->free);
-
-            if (mod->init)
-            {
-                bot_ctx(mod);
-                mod->init();
-                bot_ctx(NULL);
-            }
-        }
+        bot_module_load(mod);
     }
 
     last_event = time(NULL);
@@ -101,7 +58,7 @@ int main(int argc, char **argv)
         fd_max = 0;
         FD_ZERO(&sockets);
 
-        EACH_MODULE(modules, mod)
+        EACH_LOADED_MODULE(modules, mod)
         {
             if (mod->sock)
             {
@@ -123,7 +80,7 @@ int main(int argc, char **argv)
 
         if (select(fd_max + 1, &sockets, NULL, NULL, &tv) > 0)
         {
-            EACH_MODULE(modules, mod)
+            EACH_LOADED_MODULE(modules, mod)
             {
                 if (mod->sock)
                 {
@@ -141,7 +98,7 @@ int main(int argc, char **argv)
         now = time(NULL);
         if (now > last_event)
         {
-            EACH_MODULE(modules, mod)
+            EACH_LOADED_MODULE(modules, mod)
             {
                 if (mod->timer)
                 {
@@ -156,24 +113,89 @@ int main(int argc, char **argv)
     /* module cleanup */
     EACH_LOADED_MODULE(modules, mod)
     {
-        sprintf(str_buf, "modules/%s.so", mod->name);
-
-        printf("unloading \"%s\"\n", str_buf);
-
-        if (mod->free)
-        {
-            bot_ctx(mod);
-            mod->free();
-            bot_ctx(NULL);
-        }
-
-        if (mod->dl)
-        {
-            dlclose(mod->dl);
-        }
+        bot_module_free(mod);
     }
 
     return 0;
+}
+
+int bot_module_load(struct bot_module *mod)
+{
+    char str_buf[512];
+
+    sprintf(str_buf, "modules/%s.so", mod->name);
+
+    printf("loading \"%s\"\n", str_buf);
+
+    mod->dl = dlopen(str_buf, RTLD_LAZY|RTLD_GLOBAL);
+
+    if (mod->dl == NULL)
+    {
+        fprintf(stderr, "%s\n", dlerror());
+    }
+    else
+    {
+        printf("  loaded as 0x%08X\n", (int)mod->dl);
+
+        sprintf(str_buf, "%s_init", mod->name);
+        mod->init = dlsym(mod->dl, str_buf);
+        printf("    init at 0x%08X\n", (int)mod->init);
+
+        sprintf(str_buf, "%s_read", mod->name);
+        mod->read = dlsym(mod->dl, str_buf);
+        printf("    read at 0x%08X\n", (int)mod->read);
+
+        sprintf(str_buf, "%s_timer", mod->name);
+        mod->timer = dlsym(mod->dl, str_buf);
+        printf("    timer at 0x%08X\n", (int)mod->timer);
+
+        sprintf(str_buf, "%s_free", mod->name);
+        mod->free = dlsym(mod->dl, str_buf);
+        printf("    free at 0x%08X\n", (int)mod->free);
+
+        if (mod->init)
+        {
+            bot_ctx(mod);
+            mod->version = mod->init();
+            bot_ctx(NULL);
+
+            if (mod->version < 0)
+            {
+                bot_module_free(mod);
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
+void bot_module_free(struct bot_module *mod)
+{
+    char str_buf[512];
+
+    sprintf(str_buf, "modules/%s.so", mod->name);
+
+    printf("unloading \"%s\"\n", str_buf);
+
+    if (mod->free)
+    {
+        bot_ctx(mod);
+        mod->free();
+        bot_ctx(NULL);
+    }
+
+    if (mod->dl)
+    {
+        dlclose(mod->dl);
+    }
+
+    mod->dl = NULL;
+    mod->version = -1;
+
+    mod->init = NULL;
+    mod->free = NULL;
+    mod->timer = NULL;
 }
 
 void bot_register_fd(int sock)
@@ -190,4 +212,21 @@ void bot_unregister_fd()
     {
         _bot_context->sock = 0;
     }
+}
+
+int bot_require(const char *name, int version)
+{
+    EACH_MODULE(modules, mod)
+    {
+        if (strcmp(mod->name, name) == 0)
+        {
+            if (mod->version < version)
+            {
+                return 0;
+            }
+            return 1;
+        }
+    }
+
+    return -1;
 }

@@ -71,7 +71,7 @@ int server_sock4(char *host, int port, int *net_sock, struct sockaddr *net_serve
     return -1;
 }
 
-void server_init()
+int server_init()
 {
     struct sockaddr net_server;
     socklen_t net_addrlen;
@@ -81,7 +81,7 @@ void server_init()
     if (!server_sock4("chat.eu.freenode.net", 6667, &net_sock, &net_server, &net_addrlen))
     {
         fprintf(stderr, "server: error resolving\n");
-        return;
+        return -1;
     }
 
     if (connect(net_sock, &net_server, net_addrlen) == 0)
@@ -93,6 +93,8 @@ void server_init()
     {
         perror("connect");
     }
+
+    return 1;
 }
 
 void server_read(int read)
