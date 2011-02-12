@@ -29,6 +29,9 @@
 /* addrinfo */
 #include <netdb.h>
 
+/* sockaddr_in */
+#include <netinet/in.h>
+
 CTX server_ctx = NULL;
 
 #define BUF_SIZE 1024

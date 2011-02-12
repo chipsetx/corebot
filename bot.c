@@ -21,6 +21,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <sys/select.h>
+
 #include <time.h>
 
 #include "bot.h"
@@ -110,6 +112,7 @@ int main(int argc, char **argv)
     }
 
     /* module cleanup */
+    /* FIXME: this needs to be done in reverse order */
     EACH_LOADED_MODULE(modules, mod)
     {
         bot_module_free(mod);
@@ -122,7 +125,7 @@ int bot_module_load(struct bot_module *mod)
 {
     char str_buf[512];
 
-    sprintf(str_buf, "modules/%s.so", mod->name);
+    snprintf(str_buf, 512, "modules/%s.so", mod->name);
 
     log_printf("loading \"%s\"\n", str_buf);
 
@@ -136,19 +139,19 @@ int bot_module_load(struct bot_module *mod)
     {
         log_printf("  loaded as 0x%08X\n", (int)mod->dl);
 
-        sprintf(str_buf, "%s_init", mod->name);
+        snprintf(str_buf, 512, "%s_init", mod->name);
         mod->init = dlsym(mod->dl, str_buf);
         log_printf("    init at 0x%08X\n", (int)mod->init);
 
-        sprintf(str_buf, "%s_read", mod->name);
+        snprintf(str_buf, 512, "%s_read", mod->name);
         mod->read = dlsym(mod->dl, str_buf);
         log_printf("    read at 0x%08X\n", (int)mod->read);
 
-        sprintf(str_buf, "%s_timer", mod->name);
+        snprintf(str_buf, 512, "%s_timer", mod->name);
         mod->timer = dlsym(mod->dl, str_buf);
         log_printf("    timer at 0x%08X\n", (int)mod->timer);
 
-        sprintf(str_buf, "%s_free", mod->name);
+        snprintf(str_buf, 512, "%s_free", mod->name);
         mod->free = dlsym(mod->dl, str_buf);
         log_printf("    free at 0x%08X\n", (int)mod->free);
 
@@ -173,7 +176,7 @@ void bot_module_free(struct bot_module *mod)
 {
     char str_buf[512];
 
-    sprintf(str_buf, "modules/%s.so", mod->name);
+    snprintf(str_buf, 512, "modules/%s.so", mod->name);
 
     log_printf("unloading \"%s\"\n", str_buf);
 
