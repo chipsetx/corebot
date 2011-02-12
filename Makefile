@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-g -O2 -Wall
+CFLAGS=-D_POSIX_SOURCE -std=c99 -g -O2 -Wall
 LIBS=-ldl
 
 all:

@@ -25,9 +25,16 @@
 
 #include "bot.h"
 
+#define EACH_MODULE(a, b) \
+    for (struct bot_module *b = a; b->name; b++)
+
+#define EACH_LOADED_MODULE(a, b) \
+    for (struct bot_module *b = a; b->dl; b++)
+
 struct bot_module modules[] =
 {
     { "server" },
+    { "irc" },
     { NULL }
 };
 
@@ -37,7 +44,6 @@ struct bot_module *_bot_context = NULL;
 int main(int argc, char **argv)
 {
     char str_buf[512];
-    struct bot_module *mod;
     fd_set sockets;
     int fd_max;
     time_t last_event;
@@ -45,8 +51,7 @@ int main(int argc, char **argv)
     struct timeval tv;
 
     /* load modules */
-    mod = modules;
-    while (mod->name)
+    EACH_MODULE(modules, mod)
     {
         sprintf(str_buf, "modules/%s.so", mod->name);
 
@@ -85,8 +90,6 @@ int main(int argc, char **argv)
                 bot_ctx(NULL);
             }
         }
-
-        mod++;
     }
 
     last_event = time(NULL);
@@ -98,8 +101,7 @@ int main(int argc, char **argv)
         fd_max = 0;
         FD_ZERO(&sockets);
 
-        mod = modules;
-        while (mod->name)
+        EACH_MODULE(modules, mod)
         {
             if (mod->sock)
             {
@@ -110,8 +112,6 @@ int main(int argc, char **argv)
                     fd_max = mod->sock;
                 }
             }
-
-            mod++;
         }
 
         /* the only point of exit is when there are no fds to select from anymore */
@@ -123,8 +123,7 @@ int main(int argc, char **argv)
 
         if (select(fd_max + 1, &sockets, NULL, NULL, &tv) > 0)
         {
-            mod = modules;
-            while (mod->name)
+            EACH_MODULE(modules, mod)
             {
                 if (mod->sock)
                 {
@@ -135,8 +134,6 @@ int main(int argc, char **argv)
                         bot_ctx(NULL);
                     }
                 }
-
-                mod++;
             }
         }
 
@@ -144,8 +141,7 @@ int main(int argc, char **argv)
         now = time(NULL);
         if (now > last_event)
         {
-            mod = modules;
-            while (mod->name)
+            EACH_MODULE(modules, mod)
             {
                 if (mod->timer)
                 {
@@ -153,15 +149,12 @@ int main(int argc, char **argv)
                     mod->timer();
                     bot_ctx(NULL);
                 }
-
-                mod++;
             }
         }
     }
 
     /* module cleanup */
-    mod = modules;
-    while (mod->name)
+    EACH_LOADED_MODULE(modules, mod)
     {
         sprintf(str_buf, "modules/%s.so", mod->name);
 
@@ -178,8 +171,6 @@ int main(int argc, char **argv)
         {
             dlclose(mod->dl);
         }
-
-        mod++;
     }
 
     return 0;
