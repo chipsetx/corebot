@@ -15,37 +15,35 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 
+#include "tailq.h"
 #include "log.h"
 
 struct bot_module;
 typedef struct bot_module * CTX;
 
+TAILQ_HEAD(_modules_head, bot_module) modules_head;
+
 struct bot_module
 {
-    char *name;                 // name of the module, file and namespace
-    void *dl;                   // dlopened module
-    int version;                // version number
-    int sock;                   // optionally registered socket
+    char *name;                 /* name of the module, file and namespace */
+    void *dl;                   /* dlopened module */
+    int version;                /* version number */
+    int sock;                   /* optionally registered socket */
 
-                                // these are called (if exported)...
-    int (*init)(CTX);           //  on module load (returns version)
-    void (*read)(int sock);     //  when a registered socket is ready to read data
-    void (*timer)(void);        //  approximately once a second
-    void (*free)(void);         //  on module unload
+                                /* these are called (if exported)... */
+    int (*init)(CTX);           /*  on module load (returns version) */
+    void (*read)(int sock);     /*  when a registered socket is ready to read data */
+    void (*timer)(void);        /*  approximately once a second */
+    void (*free)(void);         /*  on module unload */
+
+    TAILQ_ENTRY(bot_module) bot_modules;
 };
-
-extern struct bot_module modules[];
 
 extern struct bot_module *_bot_context;
 #define bot_ctx(a) _bot_context = a
 #define bot_get_ctx() _bot_context
-
-#define EACH_MODULE(a, b) \
-    for (struct bot_module *b = a; b->name; b++)
-
-#define EACH_LOADED_MODULE(a, b) \
-    for (struct bot_module *b = a; b->dl; b++)
 
 int bot_module_load(struct bot_module *mod);
 void bot_module_free(struct bot_module *mod);

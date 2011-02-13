@@ -32,6 +32,9 @@
 /* sockaddr_in */
 #include <netinet/in.h>
 
+/* malloc */
+#include <stdlib.h>
+
 CTX server_ctx = NULL;
 
 #define BUF_SIZE 1024
@@ -39,29 +42,45 @@ CTX server_ctx = NULL;
 int net_sock = 0;
 int connected = 0;
 
-/* XXX: implement a list when more than one raw listener required */
-void (*server_cb)(const char *) = NULL;
-CTX server_cb_ctx = NULL;
+TAILQ_HEAD(cb_head, cb_entry) cb_h;
+
+struct cb_entry
+{
+    void (*cb)(const char *);
+    CTX ctx;
+    TAILQ_ENTRY(cb_entry) cb_entries;
+};
 
 void server_register_cb(void (*cb)(const char *))
 {
-    server_cb_ctx = bot_get_ctx();
+    struct cb_entry *e;
 
-    bot_ctx(server_ctx);
-    if (server_cb != NULL)
+    TAILQ_FOREACH(e, &cb_h, cb_entries)
     {
-        log_printf("warning: server callback overridden!\n");
+        if (e->cb == cb)
+        {
+            /* already registered */
+            return;
+        }
     }
-    bot_ctx(server_cb_ctx);
 
-    server_cb = cb;
+    e = malloc(sizeof(struct cb_entry));
+    e->ctx = bot_get_ctx();
+    e->cb = cb;
+    TAILQ_INSERT_TAIL(&cb_h, e, cb_entries);
 }
 
 void server_unregister_cb(void (*cb)(const char *))
 {
-    if (server_cb == cb)
+    struct cb_entry *e;
+    TAILQ_FOREACH(e, &cb_h, cb_entries)
     {
-        server_cb = NULL;
+        if (e->cb == cb)
+        {
+            TAILQ_REMOVE(&cb_h, e, cb_entries);
+            free(e);
+            break;
+        }
     }
 }
 
@@ -101,6 +120,8 @@ int server_resolv(char *host, int port, struct sockaddr *net_server, socklen_t *
 int server_init(CTX ctx)
 {
     server_ctx = ctx;
+
+    TAILQ_INIT(&cb_h);
 
     if (!(net_sock = socket(AF_INET, SOCK_STREAM, 0)))
     {
@@ -152,25 +173,30 @@ void server_read(int read)
     static char buf[BUF_SIZE];
     static int off = 0;
     int len;
+    struct cb_entry *e;
+    char *line;
+    char *ptr;
+    char *last;
+
     memset(buf+off, 0, BUF_SIZE - off);
 
     if ( (len = recv(read, buf+off, BUF_SIZE - off, 0)) > 0)
     {
         len += off;
 
-        char *line = buf;
-        char *ptr = buf;
-        char *last = buf;
+        line = buf;
+        ptr = buf;
+        last = buf;
 
         while ( (ptr = strstr(ptr, "\r\n")) )
         {
             *ptr++ = '\0';
             *ptr++ = '\0';
 
-            if (server_cb)
+            TAILQ_FOREACH(e, &cb_h, cb_entries)
             {
-                bot_ctx(server_cb_ctx);
-                server_cb(line);
+                bot_ctx(e->ctx);
+                e->cb(line);
                 bot_ctx(server_ctx);
             }
 
@@ -200,6 +226,13 @@ void server_read(int read)
 
 void server_free()
 {
+    struct cb_entry *e;
+    while ( (e = TAILQ_FIRST(&cb_h)) )
+    {
+        TAILQ_REMOVE(&cb_h, e, cb_entries);
+        free(e);
+    }
+
     if (net_sock)
     {
         bot_unregister_fd();

@@ -14,6 +14,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "bot.h"
+
 #include <dlfcn.h>
 
 #include <sys/types.h>
@@ -25,14 +27,20 @@
 
 #include <time.h>
 
-#include "bot.h"
-
-struct bot_module modules[] =
+void parse_config()
 {
-    { "server" },
-    { "irc" },
-    { NULL }
-};
+    struct bot_module *server = malloc(sizeof(struct bot_module));
+    struct bot_module *irc = malloc(sizeof(struct bot_module));
+
+    memset(server, 0, sizeof(struct bot_module));
+    memset(irc, 0, sizeof(struct bot_module));
+
+    server->name = "server";
+    irc->name = "irc";
+
+    TAILQ_INSERT_TAIL(&modules_head, server, bot_modules);
+    TAILQ_INSERT_TAIL(&modules_head, irc, bot_modules);
+}
 
 struct bot_module *_bot_context = NULL;
 
@@ -43,9 +51,14 @@ int main(int argc, char **argv)
     time_t last_event = 0;
     time_t now;
     struct timeval tv;
+    struct bot_module *mod;
+
+    TAILQ_INIT(&modules_head);
+
+    parse_config();
 
     /* load modules */
-    EACH_MODULE(modules, mod)
+    TAILQ_FOREACH(mod, &modules_head, bot_modules)
     {
         bot_module_load(mod);
     }
@@ -57,9 +70,9 @@ int main(int argc, char **argv)
         now = time(NULL);
         if (now > last_event)
         {
-            EACH_LOADED_MODULE(modules, mod)
+            TAILQ_FOREACH(mod, &modules_head, bot_modules)
             {
-                if (mod->timer)
+                if (mod->dl && mod->timer)
                 {
                     bot_ctx(mod);
                     mod->timer();
@@ -74,9 +87,9 @@ int main(int argc, char **argv)
         fd_max = 0;
         FD_ZERO(&sockets);
 
-        EACH_LOADED_MODULE(modules, mod)
+        TAILQ_FOREACH(mod, &modules_head, bot_modules)
         {
-            if (mod->sock)
+            if (mod->dl && mod->sock)
             {
                 FD_SET(mod->sock, &sockets);
 
@@ -96,9 +109,9 @@ int main(int argc, char **argv)
 
         if (select(fd_max + 1, &sockets, NULL, NULL, &tv) > 0)
         {
-            EACH_LOADED_MODULE(modules, mod)
+            TAILQ_FOREACH(mod, &modules_head, bot_modules)
             {
-                if (mod->sock)
+                if (mod->dl && mod->sock)
                 {
                     if (FD_ISSET(mod->sock, &sockets))
                     {
@@ -112,10 +125,11 @@ int main(int argc, char **argv)
     }
 
     /* module cleanup */
-    /* FIXME: this needs to be done in reverse order */
-    EACH_LOADED_MODULE(modules, mod)
+    while ( (mod = TAILQ_LAST(&modules_head, _modules_head)) )
     {
         bot_module_free(mod);
+        TAILQ_REMOVE(&modules_head, mod, bot_modules);
+        free(mod);
     }
 
     return 0;
@@ -140,19 +154,19 @@ int bot_module_load(struct bot_module *mod)
         log_printf("  loaded as 0x%08X\n", (int)mod->dl);
 
         snprintf(str_buf, 512, "%s_init", mod->name);
-        mod->init = dlsym(mod->dl, str_buf);
+        *(void **)(&mod->init) = dlsym(mod->dl, str_buf);
         log_printf("    init at 0x%08X\n", (int)mod->init);
 
         snprintf(str_buf, 512, "%s_read", mod->name);
-        mod->read = dlsym(mod->dl, str_buf);
+        *(void **)(&mod->read) = dlsym(mod->dl, str_buf);
         log_printf("    read at 0x%08X\n", (int)mod->read);
 
         snprintf(str_buf, 512, "%s_timer", mod->name);
-        mod->timer = dlsym(mod->dl, str_buf);
+        *(void **)(&mod->timer) = dlsym(mod->dl, str_buf);
         log_printf("    timer at 0x%08X\n", (int)mod->timer);
 
         snprintf(str_buf, 512, "%s_free", mod->name);
-        mod->free = dlsym(mod->dl, str_buf);
+        *(void **)(&mod->free) = dlsym(mod->dl, str_buf);
         log_printf("    free at 0x%08X\n", (int)mod->free);
 
         if (mod->init)
@@ -196,8 +210,9 @@ void bot_module_free(struct bot_module *mod)
     mod->version = -1;
 
     mod->init = NULL;
-    mod->free = NULL;
+    mod->read = NULL;
     mod->timer = NULL;
+    mod->free = NULL;
 }
 
 void bot_register_fd(int sock)
@@ -218,9 +233,11 @@ void bot_unregister_fd()
 
 int bot_require(const char *name, int version)
 {
-    EACH_MODULE(modules, mod)
+    struct bot_module *mod;
+
+    TAILQ_FOREACH(mod, &modules_head, bot_modules)
     {
-        if (strcmp(mod->name, name) == 0)
+        if (mod->dl && strcmp(mod->name, name) == 0)
         {
             if (mod->version < version)
             {
