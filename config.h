@@ -17,3 +17,7 @@
 void config_load(const char *file);
 const char *config_get(const char *key);
 void config_free();
+
+#define STR_TRUE(s) \
+    s && strlen(s) > 0 && \
+    (s[0] == 't' || s[0] == 'T' || s[0] == 'y' || s[0] == 'Y' || s[0] == 'e' || s[0] == 'E')
