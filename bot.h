@@ -20,6 +20,7 @@
 
 #include "tailq.h"
 #include "log.h"
+#include "config.h"
 
 struct bot_module;
 typedef struct bot_module * CTX;

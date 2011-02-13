@@ -24,7 +24,7 @@
 
 CTX irc_ctx = NULL;
 
-regex_t preg;
+static regex_t preg;
 
 static TAILQ_HEAD(cb_head, cb_entry) cb_h;
 
@@ -112,7 +112,8 @@ void irc_process(const char *line)
         }
 
         /* log some meaningful messages */
-        if (strcmp(command, "001") == 0 || strcmp(command, "002") == 0 || strcmp(command, "003") == 0 || (strcmp(command, "NOTICE") == 0 && pparams && strcmp(pparams, "*") == 0))
+        if (strcmp(command, "001") == 0 || strcmp(command, "002") == 0 || strcmp(command, "003") == 0 || strcmp(command, "020") == 0 ||
+                (strcmp(command, "NOTICE") == 0 && pparams && (strcmp(pparams, "*") == 0 || strcmp(pparams, "AUTH") == 0)))
         {
             log_printf("%s\n", trail);
         }
@@ -184,6 +185,13 @@ int irc_init(CTX ctx)
 
 void irc_free()
 {
+    struct cb_entry *e;
+    while ( (e = TAILQ_FIRST(&cb_h)) )
+    {
+        TAILQ_REMOVE(&cb_h, e, cb_entries);
+        free(e);
+    }
+
     server_unregister_cb(irc_process);
     regfree(&preg);
 }

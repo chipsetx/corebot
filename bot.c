@@ -27,29 +27,6 @@
 
 #include <time.h>
 
-void parse_config()
-{
-    struct bot_module *server = malloc(sizeof(struct bot_module));
-    struct bot_module *irc = malloc(sizeof(struct bot_module));
-    struct bot_module *uinfo = malloc(sizeof(struct bot_module));
-    struct bot_module *pong = malloc(sizeof(struct bot_module));
-
-    memset(server, 0, sizeof(struct bot_module));
-    memset(irc, 0, sizeof(struct bot_module));
-    memset(uinfo, 0, sizeof(struct bot_module));
-    memset(pong, 0, sizeof(struct bot_module));
-
-    server->name = "server";
-    irc->name = "irc";
-    uinfo->name = "uinfo";
-    pong->name = "pong";
-
-    TAILQ_INSERT_TAIL(&modules_head, server, bot_modules);
-    TAILQ_INSERT_TAIL(&modules_head, irc, bot_modules);
-    TAILQ_INSERT_TAIL(&modules_head, uinfo, bot_modules);
-    TAILQ_INSERT_TAIL(&modules_head, pong, bot_modules);
-}
-
 struct bot_module *_bot_context = NULL;
 
 int main(int argc, char **argv)
@@ -60,10 +37,26 @@ int main(int argc, char **argv)
     time_t now;
     struct timeval tv;
     struct bot_module *mod;
+    char *modules, *p, *last = NULL;
 
     TAILQ_INIT(&modules_head);
 
-    parse_config();
+    config_load("corebot.ini");
+    modules = (char *)config_get("modules");
+
+    if (modules == NULL)
+    {
+        log_printf("No modules in config, abort.\n");
+        return 1;
+    }
+
+    modules = strdup(modules);
+    for ((p = strtok_r(modules, ",", &last)); p; (p = strtok_r(NULL, ",", &last))) {
+        mod = calloc(sizeof(struct bot_module), 1);
+        mod->name = strdup(p);
+        TAILQ_INSERT_TAIL(&modules_head, mod, bot_modules);
+    }
+    free(modules);
 
     /* load modules */
     TAILQ_FOREACH(mod, &modules_head, bot_modules)
@@ -140,6 +133,8 @@ int main(int argc, char **argv)
         free(mod);
     }
 
+    config_free();
+
     return 0;
 }
 
@@ -213,6 +208,8 @@ void bot_module_free(struct bot_module *mod)
     {
         dlclose(mod->dl);
     }
+
+    free(mod->name);
 
     mod->dl = NULL;
     mod->version = -1;

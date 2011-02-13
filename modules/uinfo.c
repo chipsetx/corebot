@@ -21,12 +21,27 @@ int uinfo_registered = 0;
 
 void uinfo_irc(const char *prefix, const char *command, const char *params, const char *trail)
 {
+    const char *nick;
+    const char *username;
+    const char *realname;
+
     /* XXX: handle registration fail (nick reserved) */
-    if (!uinfo_registered && strcmp(command, "NOTICE") == 0 && strcmp(params, "*") == 0)
+    if (!uinfo_registered && (strcmp(params, "*") == 0 || strcmp(params, "AUTH") == 0))
     {
-        irc_printf("NICK corebot\r\n");
-        irc_printf("USER corebot b c :infobot\r\n");
         uinfo_registered = 1;
+
+        nick = config_get("nick");
+        username = config_get("username");
+        realname = config_get("realname");
+
+        if (nick == NULL || username == NULL || realname == NULL)
+        {
+            log_printf("nick, username or realname not defined in config, can't login\n");
+            return;
+        }
+
+        irc_printf("NICK %s\r\n", nick);
+        irc_printf("USER %s * * :%s\r\n", username, realname);
     }
 }
 

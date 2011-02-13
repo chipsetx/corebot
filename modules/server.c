@@ -85,7 +85,7 @@ void server_unregister_cb(SERVER_CB cb)
     }
 }
 
-int server_resolv(char *host, int port, struct sockaddr *net_server, socklen_t *net_addrlen)
+int server_resolv(const char *host, int port, struct sockaddr *net_server, socklen_t *net_addrlen)
 {
     struct addrinfo *addr_list = NULL;
     struct addrinfo *addr;
@@ -146,10 +146,23 @@ void server_timer()
 {
     struct sockaddr net_server;
     socklen_t net_addrlen;
+    const char *host;
+    const char *port;
 
     if (!connected)
     {
-        if (!server_resolv("chat.eu.freenode.net", 6667, &net_server, &net_addrlen))
+        host = config_get("host");
+        port = config_get("port");
+
+        if (host == NULL || port == NULL)
+        {
+            log_printf("host or port missing in config, can't connect\n");
+            return;
+        }
+
+        log_printf("connecting to %s:%s\n", host, port);
+
+        if (!server_resolv(host, atoi(port), &net_server, &net_addrlen))
         {
             log_printf("error resolving\n");
             return;
