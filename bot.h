@@ -53,3 +53,4 @@ void bot_module_free(struct bot_module *mod);
 void bot_register_fd(int sock);
 void bot_unregister_fd();
 int bot_require(const char *name, int version);
+void bot_die();

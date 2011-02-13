@@ -28,6 +28,7 @@
 #include <time.h>
 
 struct bot_module *_bot_context = NULL;
+int bot_next_die = 0;
 
 int main(int argc, char **argv)
 {
@@ -65,7 +66,7 @@ int main(int argc, char **argv)
     }
 
     /* main fd loop */
-    while(1)
+    while( !bot_next_die )
     {
         /* handle timer */
         now = time(NULL);
@@ -100,10 +101,6 @@ int main(int argc, char **argv)
                 }
             }
         }
-
-        /* the only point of exit is when there are no fds to select from anymore */
-        if (fd_max == 0)
-            break;
 
         tv.tv_sec = 1;
         tv.tv_usec = 0;
@@ -253,4 +250,9 @@ int bot_require(const char *name, int version)
     }
 
     return -1;
+}
+
+void bot_die()
+{
+    bot_next_die = 1;
 }
