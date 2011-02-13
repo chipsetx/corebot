@@ -40,6 +40,9 @@ int main(int argc, char **argv)
     struct bot_module *mod;
     char *modules, *p, *last = NULL;
 
+    log_printf("corebot git~%s\n", GIT_REV);
+    log_printf("===================\n");
+
     TAILQ_INIT(&modules_head);
 
     config_load("corebot.ini");

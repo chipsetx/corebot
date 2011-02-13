@@ -1,6 +1,12 @@
+#
+# GNU Makefile
+#
+
 CC=gcc
 CFLAGS=-D_POSIX_SOURCE -D_BSD_SOURCE -std=c89 -pedantic-errors -fno-strict-aliasing -g -O2 -Wall
 LIBS=-ldl
+
+CFLAGS+=-DGIT_REV="\"$(shell git rev-parse --short HEAD)\""
 
 all:
 	$(CC) $(CFLAGS) -shared -o modules/server.so modules/server.c
