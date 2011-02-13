@@ -23,6 +23,7 @@
 /* socket */
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <errno.h>
 
 /* close */
 #include <unistd.h>
@@ -167,7 +168,7 @@ void server_timer()
     socklen_t net_addrlen;
     const char *host;
     const char *port;
-    int now;
+    int now, ret;
 
     if (!connected)
     {
@@ -200,14 +201,14 @@ void server_timer()
 
         bot_register_fd(net_sock);
 
-        if (connect(net_sock, (struct sockaddr *)&net_server, net_addrlen) == 0)
+        if ( (ret = connect(net_sock, (struct sockaddr *)&net_server, net_addrlen)) == 0)
         {
             connected = 1;
             log_printf("Connected.\n");
         }
         else
         {
-            perror("connect");
+            log_printf("Error: %s\n", strerror(errno));
             close(net_sock);
             net_sock = 0;
         }
