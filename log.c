@@ -15,6 +15,7 @@
  */
 
 #include "bot.h"
+#include <time.h>
 #include <stdarg.h>
 
 extern struct bot_module *_bot_context;
@@ -23,6 +24,18 @@ int log_printf(const char *fmt, ...)
 {
     va_list args;
     int ret;
+    char buf[64];
+    time_t now;
+    struct tm *tm;
+
+    now = time(NULL);
+    tm = localtime(&now);
+
+    if (tm)
+    {
+        strftime(buf, 64, "%c", tm);
+        fprintf(stdout, "%s ", buf);
+    }
 
     if (_bot_context)
     {
