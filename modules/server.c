@@ -30,18 +30,26 @@
 /* addrinfo */
 #include <netdb.h>
 
+/* inet_ntop */
+#include <arpa/inet.h>
+
 /* sockaddr_in */
 #include <netinet/in.h>
 
 /* malloc */
 #include <stdlib.h>
 
+/* time */
+#include <time.h>
+
 CTX server_ctx = NULL;
 
 #define BUF_SIZE 1024
 
-int net_sock = 0;
-int connected = 0;
+static int net_sock = 0;
+static int connected = 0;
+static int server_last_connect = 0;
+static int server_reconnect = 30;
 
 static TAILQ_HEAD(cb_head, cb_entry) cb_h;
 
@@ -85,37 +93,58 @@ void server_unregister_cb(SERVER_CB cb)
     }
 }
 
-int server_resolv(const char *host, int port, struct sockaddr *net_server, socklen_t *net_addrlen)
+int server_resolv(const char *host, const char *port, struct sockaddr_storage *net_server, socklen_t *net_addrlen)
 {
-    struct addrinfo *addr_list = NULL;
     struct addrinfo *addr;
+    struct addrinfo hint;
+    int ret, s;
+    char buf[INET6_ADDRSTRLEN];
 
-    if (getaddrinfo(host, NULL, NULL, &addr_list) == 0)
+    if (STR_TRUE(config_get("v4only")))
     {
-        if (addr_list == NULL)
+        hint.ai_family = AF_INET;
+    }
+    else if (STR_TRUE(config_get("v6only")))
+    {
+        hint.ai_family = AF_INET6;
+    }
+    else
+    {
+        hint.ai_family = PF_UNSPEC;
+    }
+    hint.ai_socktype = SOCK_STREAM;
+    hint.ai_protocol = IPPROTO_TCP;
+    hint.ai_flags = AI_NUMERICSERV;
+
+    if ( (ret = getaddrinfo(host, port, &hint, &addr)) == 0)
+    {
+        if (addr == NULL)
         {
-            return -1;
+            return 0;
         }
 
-        addr = addr_list;
-
-        while (addr->ai_next)
+        if (!(s = socket(addr->ai_family, SOCK_STREAM, 0)))
         {
-            if (addr->ai_family == AF_INET)
-            {
-                *net_addrlen = addr->ai_addrlen;
-                memcpy(net_server, addr->ai_addr, addr->ai_addrlen);
-                ((struct sockaddr_in *)net_server)->sin_port = htons(port);
-                freeaddrinfo(addr_list);
-                return 1;
-            }
-            addr++;
+            log_printf("Error creating socket for family %d", addr->ai_family);
+            return 0;
         }
 
-        freeaddrinfo(addr_list);
+        if (inet_ntop(addr->ai_family, addr->ai_addr, buf, addr->ai_addrlen))
+        {
+            log_printf("Resolved to %s\n", buf);
+        }
+
+        *net_addrlen = addr->ai_addrlen;
+        memcpy(net_server, addr->ai_addr, addr->ai_addrlen);
+
+        freeaddrinfo(addr);
+
+        return s;
     }
 
-    return -1;
+    log_printf("Error resolving: %s\n", gai_strerror(ret));
+
+    return 0;
 }
 
 int server_init(CTX ctx)
@@ -123,16 +152,6 @@ int server_init(CTX ctx)
     server_ctx = ctx;
 
     TAILQ_INIT(&cb_h);
-
-    if (!(net_sock = socket(AF_INET, SOCK_STREAM, 0)))
-    {
-        log_printf("error creating socket");
-        return -1;
-    }
-
-    bot_register_fd(net_sock);
-
-    log_printf("socket: %d\n", net_sock);
 
     return 1;
 }
@@ -144,40 +163,53 @@ void server_send(const char *msg)
 
 void server_timer()
 {
-    struct sockaddr net_server;
+    struct sockaddr_storage net_server;
     socklen_t net_addrlen;
     const char *host;
     const char *port;
+    int now;
 
     if (!connected)
     {
+        now = time(NULL);
+
+        if (server_last_connect + server_reconnect > now)
+        {
+            return;
+        }
+
+        server_last_connect = now;
+
         host = config_get("host");
         port = config_get("port");
 
         if (host == NULL || port == NULL)
         {
-            log_printf("host or port missing in config, can't connect\n");
+            log_printf("Host or port missing in config, can't connect\n");
             return;
         }
 
-        log_printf("connecting to %s:%s\n", host, port);
+        log_printf("Connecting to %s:%s...\n", host, port);
 
-        if (!server_resolv(host, atoi(port), &net_server, &net_addrlen))
+        net_sock = server_resolv(host, port, &net_server, &net_addrlen);
+
+        if (!net_sock)
         {
-            log_printf("error resolving\n");
             return;
         }
 
-        log_printf("resolved\n");
+        bot_register_fd(net_sock);
 
-        if (connect(net_sock, &net_server, net_addrlen) == 0)
+        if (connect(net_sock, (struct sockaddr *)&net_server, net_addrlen) == 0)
         {
             connected = 1;
-            log_printf("connected\n");
+            log_printf("Connected.\n");
         }
         else
         {
             perror("connect");
+            close(net_sock);
+            net_sock = 0;
         }
     }
 }
@@ -231,10 +263,12 @@ void server_read(int read)
     }
     else
     {
-        log_printf("disconnected\n");
+        log_printf("Disconnected.\n");
         close(net_sock);
         bot_unregister_fd();
+        net_sock = 0;
         connected = 0;
+        server_last_connect = time(NULL);
     }
 }
 
