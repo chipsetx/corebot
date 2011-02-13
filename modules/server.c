@@ -15,6 +15,7 @@
  */
 
 #include "../bot.h"
+#include "server.h"
 
 /* memcpy */
 #include <string.h>
@@ -42,16 +43,16 @@ CTX server_ctx = NULL;
 int net_sock = 0;
 int connected = 0;
 
-TAILQ_HEAD(cb_head, cb_entry) cb_h;
+static TAILQ_HEAD(cb_head, cb_entry) cb_h;
 
 struct cb_entry
 {
-    void (*cb)(const char *);
+    SERVER_CB cb;
     CTX ctx;
     TAILQ_ENTRY(cb_entry) cb_entries;
 };
 
-void server_register_cb(void (*cb)(const char *))
+void server_register_cb(SERVER_CB cb)
 {
     struct cb_entry *e;
 
@@ -70,7 +71,7 @@ void server_register_cb(void (*cb)(const char *))
     TAILQ_INSERT_TAIL(&cb_h, e, cb_entries);
 }
 
-void server_unregister_cb(void (*cb)(const char *))
+void server_unregister_cb(SERVER_CB cb)
 {
     struct cb_entry *e;
     TAILQ_FOREACH(e, &cb_h, cb_entries)

@@ -31,15 +31,23 @@ void parse_config()
 {
     struct bot_module *server = malloc(sizeof(struct bot_module));
     struct bot_module *irc = malloc(sizeof(struct bot_module));
+    struct bot_module *uinfo = malloc(sizeof(struct bot_module));
+    struct bot_module *pong = malloc(sizeof(struct bot_module));
 
     memset(server, 0, sizeof(struct bot_module));
     memset(irc, 0, sizeof(struct bot_module));
+    memset(uinfo, 0, sizeof(struct bot_module));
+    memset(pong, 0, sizeof(struct bot_module));
 
     server->name = "server";
     irc->name = "irc";
+    uinfo->name = "uinfo";
+    pong->name = "pong";
 
     TAILQ_INSERT_TAIL(&modules_head, server, bot_modules);
     TAILQ_INSERT_TAIL(&modules_head, irc, bot_modules);
+    TAILQ_INSERT_TAIL(&modules_head, uinfo, bot_modules);
+    TAILQ_INSERT_TAIL(&modules_head, pong, bot_modules);
 }
 
 struct bot_module *_bot_context = NULL;
