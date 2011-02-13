@@ -22,10 +22,10 @@ int uinfo_registered = 0;
 void uinfo_irc(const char *prefix, const char *command, const char *params, const char *trail)
 {
     const char *nick;
+    const char *altnick;
     const char *username;
     const char *realname;
 
-    /* XXX: handle registration fail (nick reserved) */
     if (!uinfo_registered && (strcmp(params, "*") == 0 || strcmp(params, "AUTH") == 0))
     {
         uinfo_registered = 1;
@@ -42,6 +42,23 @@ void uinfo_irc(const char *prefix, const char *command, const char *params, cons
 
         irc_printf("NICK %s\r\n", nick);
         irc_printf("USER %s * * :%s\r\n", username, realname);
+    }
+
+    if (strcmp(command, "433") == 0)
+    {
+        altnick = config_get("altnick");
+
+        if (altnick && uinfo_registered == 1)
+        {
+            uinfo_registered = 2;
+            log_printf("%s, trying %s\n", trail, altnick);
+            irc_printf("NICK %s\r\n", altnick);
+        }
+        else
+        {
+            log_printf("%s\n", trail);
+            log_printf("We are out of nicknames, can't register.\n");
+        }
     }
 }
 
