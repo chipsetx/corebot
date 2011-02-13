@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-D_POSIX_SOURCE -D_BSD_SOURCE -std=c90 -pedantic-errors -fno-strict-aliasing -g -O2 -Wall
+CFLAGS=-D_POSIX_SOURCE -D_BSD_SOURCE -std=c89 -pedantic-errors -fno-strict-aliasing -g -O2 -Wall
 LIBS=-ldl
 
 all:
