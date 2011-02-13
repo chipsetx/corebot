@@ -123,6 +123,11 @@ void irc_process(const char *line)
             log_printf("User mode set to %s\n", trail);
         }
 
+        if (strcmp(command, "ERROR") == 0)
+        {
+            log_printf("Error: %s\n", ptrail);
+        }
+
         #ifdef IRC_DEBUG
         log_printf("-> %s %s %s :%s\n", pprefix, command, pparams, ptrail);
         #endif
