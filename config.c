@@ -79,12 +79,12 @@ void config_load(const char *file)
         log_printf("config: error compiling section regexp\n");
     }
 
-    if (regcomp(&preg_pair, "^[[:space:]]*([a-z_]+)[[:space:]]*=[[:space:]]*([^;[:space:]]+)", REG_EXTENDED) != 0)
+    if (regcomp(&preg_pair, "^[[:space:]]*([a-z0-9_]+)[[:space:]]*=[[:space:]]*([^;[:space:]]+)", REG_EXTENDED) != 0)
     {
         log_printf("config: error compiling pair regexp\n");
     }
 
-    if (regcomp(&preg_pair_q, "^[[:space:]]*([a-z_]+)[[:space:]]*=[[:space:]]*\"([^\"]+)\"", REG_EXTENDED) != 0)
+    if (regcomp(&preg_pair_q, "^[[:space:]]*([a-z0-9_]+)[[:space:]]*=[[:space:]]*\"([^\"]+)\"", REG_EXTENDED) != 0)
     {
         log_printf("config: error compiling pair regexp\n");
     }
